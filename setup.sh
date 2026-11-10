@@ -53,6 +53,83 @@ ensure_starship() {
     status done "starship installed"
 }
 
+SIDEBAR_REPO="https://github.com/hiroppy/tmux-agent-sidebar"
+SIDEBAR_DIR="$HOME/.tmux/plugins/tmux-agent-sidebar"
+
+# Clone tmux-agent-sidebar at its latest release tag and fetch the matching
+# prebuilt binary (its tmux entry point refuses to load on a version mismatch).
+ensure_agent_sidebar() {
+    status running "tmux-agent-sidebar"
+
+    if [ ! -d "$SIDEBAR_DIR/.git" ]; then
+        local tag
+        tag="$(git ls-remote --tags --refs --sort=-v:refname "$SIDEBAR_REPO" 'v*' \
+               | head -n1 | sed 's|.*refs/tags/||')"
+        if [ -z "$tag" ]; then
+            status fail "tmux-agent-sidebar: could not find a release tag"
+            return
+        fi
+        mkdir -p "$(dirname "$SIDEBAR_DIR")"
+        git -c advice.detachedHead=false clone -q --depth 1 --branch "$tag" \
+            "$SIDEBAR_REPO" "$SIDEBAR_DIR"
+        status done "tmux-agent-sidebar $tag cloned"
+    fi
+
+    local bin="$SIDEBAR_DIR/bin/tmux-agent-sidebar" want have
+    want="$(sed -n 's/^version *= *"\(.*\)"/\1/p' "$SIDEBAR_DIR/Cargo.toml")"
+    have="$("$bin" version 2>/dev/null || true)"
+    if [ -n "$want" ] && [ "$have" = "$want" ]; then
+        status skip "tmux-agent-sidebar binary already at $want"
+        return
+    fi
+
+    local os arch
+    os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+    case "$(uname -m)" in
+        x86_64|amd64)  arch=x86_64 ;;
+        arm64|aarch64) arch=aarch64 ;;
+        *) status fail "tmux-agent-sidebar: unsupported arch $(uname -m)"; return ;;
+    esac
+
+    local url="$SIDEBAR_REPO/releases/download/v$want/tmux-agent-sidebar-$os-$arch"
+    mkdir -p "$SIDEBAR_DIR/bin"
+    if curl -fsSL "$url" -o "$bin.tmp"; then
+        chmod +x "$bin.tmp" && mv "$bin.tmp" "$bin"
+        pkill -f "$bin" 2>/dev/null || true   # running sidebars restart on toggle
+        status done "tmux-agent-sidebar binary $want"
+    else
+        rm -f "$bin.tmp"
+        status fail "tmux-agent-sidebar: download failed ($url)"
+    fi
+}
+
+# Register the sidebar's hooks with Claude Code (skipped if claude is absent).
+ensure_sidebar_claude_plugin() {
+    status running "tmux-agent-sidebar Claude Code plugin"
+
+    if ! command -v claude >/dev/null 2>&1; then
+        status skip "claude not installed; re-run setup.sh after installing it"
+        return
+    fi
+    if [ ! -d "$SIDEBAR_DIR" ]; then
+        status skip "tmux-agent-sidebar not installed"
+        return
+    fi
+    if claude plugin list 2>/dev/null | grep -q 'tmux-agent-sidebar'; then
+        status skip "Claude Code plugin already installed"
+        return
+    fi
+
+    if ! claude plugin marketplace list 2>/dev/null | grep -q 'hiroppy'; then
+        claude plugin marketplace add "$SIDEBAR_DIR" >/dev/null
+    fi
+    if claude plugin install tmux-agent-sidebar@hiroppy >/dev/null; then
+        status done "Claude Code plugin installed"
+    else
+        status fail "claude plugin install tmux-agent-sidebar@hiroppy"
+    fi
+}
+
 main() {
     echo "Setting up dotfiles from $DOTFILES_DIR"
     echo
@@ -60,7 +137,10 @@ main() {
     link_file bash_profile .bash_profile
     link_file bashrc .bashrc
     link_file vimrc .vimrc
+    link_file tmux.conf .tmux.conf
     ensure_starship
+    ensure_agent_sidebar
+    ensure_sidebar_claude_plugin
 
     echo
     echo "Done. Start a new shell (or 'exec bash -l') to pick up changes."

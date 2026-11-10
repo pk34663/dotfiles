@@ -37,16 +37,18 @@ if [[ -f "$DOTFILES_DIR/packages-rocky.txt" ]]; then
   (( ${#EXTRA[@]} )) && sudo dnf -y install "${EXTRA[@]}"
 fi
 
-# Hand over to the repo's own installer (symlinks, starship)
-if [[ -f "$DOTFILES_DIR/setup.sh" ]]; then
-  log "Running dotfiles setup.sh"
-  (cd "$DOTFILES_DIR" && bash ./setup.sh)
-fi
-
-# --- 3. Claude Code ----------------------------------------------------------
+# --- 3. Claude Code (first, so setup.sh can register the sidebar plugin) ---
 if ! command -v claude >/dev/null 2>&1; then
   log "Installing Claude Code"
   curl -fsSL https://claude.ai/install.sh | bash
+fi
+export PATH="$HOME/.local/bin:$PATH"
+
+# --- 4. Dotfiles setup ------------------------------------------------------
+# Hand over to the repo's own installer (symlinks, starship, tmux-agent-sidebar)
+if [[ -f "$DOTFILES_DIR/setup.sh" ]]; then
+  log "Running dotfiles setup.sh"
+  (cd "$DOTFILES_DIR" && bash ./setup.sh)
 fi
 
 log "Done. Open a new shell (or: exec bash -l)."
