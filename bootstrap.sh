@@ -3,10 +3,10 @@
 # Safe to re-run.
 #
 # Usage (inside Rocky, as your normal user):
-#   curl -fsSL https://raw.githubusercontent.com/<you>/dotfiles/main/bootstrap.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/pk34663/dotfiles/master/bootstrap.sh | bash
 set -euo pipefail
 
-DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/<you>/dotfiles.git}"
+DOTFILES_REPO="${DOTFILES_REPO:-https://github.com/pk34663/dotfiles.git}"
 DOTFILES_DIR="${DOTFILES_DIR:-$HOME/.dotfiles}"
 
 log() { printf '\n==> %s\n' "$*"; }
@@ -37,10 +37,10 @@ if [[ -f "$DOTFILES_DIR/packages-rocky.txt" ]]; then
   (( ${#EXTRA[@]} )) && sudo dnf -y install "${EXTRA[@]}"
 fi
 
-# Hand over to the repo's own installer (symlinks etc.) if it has one
-if [[ -x "$DOTFILES_DIR/install.sh" ]]; then
-  log "Running dotfiles install.sh"
-  "$DOTFILES_DIR/install.sh"
+# Hand over to the repo's own installer (symlinks, starship)
+if [[ -f "$DOTFILES_DIR/setup.sh" ]]; then
+  log "Running dotfiles setup.sh"
+  (cd "$DOTFILES_DIR" && bash ./setup.sh)
 fi
 
 # --- 3. Claude Code ----------------------------------------------------------
